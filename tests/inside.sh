@@ -19,6 +19,9 @@ ssh_senzu() {
         -o ConnectTimeout=5 senzu@127.0.0.1 "$@"
 }
 as_agent() { su -s /bin/bash hermes -c "$*"; }
+# A live process of senzu's, zombies excluded: a killed process may linger as a zombie until its
+# new parent reaps it, and it is dead all the same.
+senzu_running() { ps -u senzu -o stat=,comm= 2>/dev/null | awk -v name="$1" '$1 !~ /^Z/ && $2 == name {found=1} END {exit !found}'; }
 # What the path unit (or cron) does when the request changes; containers have no systemd.
 request() { as_agent "echo $1 > $REQUEST" && "$HELPER" sync >/dev/null; }
 
@@ -72,10 +75,10 @@ echo "== close on request, with a session in progress"
 ssh_senzu 'sleep 120' &
 session=$!
 sleep 2
-check "session running" pgrep -u senzu sleep
+check "session running" senzu_running sleep
 request closed
 sleep 1
-refuse "open session ended" pgrep -u senzu sleep
+refuse "open session ended" senzu_running sleep
 wait "$session" 2>/dev/null
 check "status closed" bash -c "[[ \$($HELPER status) == closed ]]"
 refuse "ssh refused after close" ssh_senzu true

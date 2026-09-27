@@ -91,7 +91,9 @@ trap 'rm -rf "$scratch"' EXIT
 
 if ((uninstall)); then
     confirm "Supprimer l'accès Senzu (utilisateur $SENZU_USER, commande, règles sudo) ?"
-    [[ -x $HELPER ]] && "$HELPER" off >/dev/null 2>&1 || true
+    if [[ -x $HELPER ]]; then
+        "$HELPER" off >/dev/null 2>&1 || true
+    fi
     if command -v systemctl >/dev/null && [[ -d /run/systemd/system ]]; then
         systemctl disable --now senzu-access.path >/dev/null 2>&1 || true
     fi

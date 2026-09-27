@@ -10,7 +10,7 @@ status=0
 
 for image in "${images[@]}"; do
     echo "### $image"
-    container=$(docker run -d --rm "$image" sleep 600)
+    container=$(docker run -d --rm --init ${SENZU_TEST_PLATFORM:+--platform "$SENZU_TEST_PLATFORM"} "$image" sleep 600)
     trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
     docker exec "$container" bash -c \
         'export DEBIAN_FRONTEND=noninteractive; apt-get update -qq >/dev/null && apt-get install -y -qq openssh-server openssh-client sudo procps passwd >/dev/null' \
