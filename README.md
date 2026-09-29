@@ -47,6 +47,7 @@ It shows what it will do and the fingerprint of each Senzu key, and asks before 
 | `--agent-user USER` | `hermes` | The user the Hermes plugin runs as |
 | `--key-url URL` | Senzu's published keys | Where to fetch Senzu's public keys (one per line, eight at most) |
 | `--key-file PATH`, `--key "ssh-ed25519 …"` | | Give the keys directly instead |
+| `--host NAME` | the machine's public address | The name or IP Senzu connects to, when it is not the address the machine reaches the internet from (a machine behind a router, a DNS name you prefer) |
 | `--yes` | | No confirmation (scripted installs) |
 | `--uninstall` | | Remove everything this installed |
 

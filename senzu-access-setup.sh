@@ -19,7 +19,7 @@
 #
 # Usage:
 #   sudo bash senzu-access-setup.sh [--key-url URL | --key-file PATH | --key "ssh-ed25519 …"]
-#                                   [--agent-user hermes] [--yes]
+#                                   [--agent-user hermes] [--host NAME] [--yes]
 #   sudo bash senzu-access-setup.sh --uninstall [--agent-user hermes] [--yes]
 #
 # Everything it installs is removed by --uninstall. Running it again updates the key and the
@@ -27,7 +27,7 @@
 
 set -euo pipefail
 
-readonly VERSION=0.2.0
+readonly VERSION=0.2.1
 readonly SENZU_USER=senzu
 readonly CONF_DIR=/etc/senzu
 readonly KEYS_FILE="$CONF_DIR/authorized_keys"
@@ -46,6 +46,7 @@ key_url=$DEFAULT_KEY_URL
 key_file=
 key_text=
 agent_user=hermes
+host_override=
 assume_yes=0
 uninstall=0
 
@@ -63,6 +64,7 @@ while (($#)); do
         --key-file) key_file=${2:?--key-file needs a value}; shift 2 ;;
         --key) key_text=${2:?--key needs a value}; shift 2 ;;
         --agent-user) agent_user=${2:?--agent-user needs a value}; shift 2 ;;
+        --host) host_override=${2:?--host needs a value}; shift 2 ;;
         --yes | -y) assume_yes=1; shift ;;
         --uninstall) uninstall=1; shift ;;
         --help | -h) usage 0 ;;
@@ -309,8 +311,24 @@ for candidate in /etc/ssh/ssh_host_ed25519_key.pub /etc/ssh/ssh_host_ecdsa_key.p
         break
     fi
 done
+# The name Senzu connects to. A machine's own name often means nothing outside (cr.edouard.cl
+# resolved nowhere but in its own /etc/hosts), so: --host when given, else the address this
+# machine reaches the internet from, which is what a VPS is reached at.
+if [[ -n ${host_override:-} ]]; then
+    connect_host=$host_override
+else
+    # Either may be missing (a minimal image has no iproute2): an empty answer, never an exit.
+    connect_host=$( (ip -4 route get 1.1.1.1 2>/dev/null || true) \
+        | awk '{for (i = 1; i < NF; i++) if ($i == "src") {print $(i + 1); exit}}')
+    [[ -n $connect_host ]] || connect_host=$( (hostname -I 2>/dev/null || true) | awk '{print $1}')
+    [[ -n $connect_host ]] || connect_host=$(hostname -f 2>/dev/null || hostname)
+    if [[ $connect_host =~ ^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.) ]]; then
+        say "⚠ Adresse privée ($connect_host) : Senzu ne pourra pas s'y connecter depuis internet. Relancez avec --host <nom public ou IP>."
+    fi
+fi
+say "  Senzu se connectera à  : $SENZU_USER@$connect_host, port ${port:-22}"
 printf '{"hostname": "%s", "port": %s, "host_key": "%s", "user": "%s"}\n' \
-    "$(hostname -f 2>/dev/null || hostname)" "${port:-22}" "$host_key" "$SENZU_USER" >"$HOST_FILE"
+    "$connect_host" "${port:-22}" "$host_key" "$SENZU_USER" >"$HOST_FILE"
 chmod 0644 "$HOST_FILE"
 
 echo closed >"$REQUEST_FILE"

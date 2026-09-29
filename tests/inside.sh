@@ -105,6 +105,10 @@ check "new key accepted" ssh -i /tmp/other_key -o BatchMode=yes -o StrictHostKey
 check "one sudo file, for senzu only" bash -c "[[ \$(ls /etc/sudoers.d | grep -c senzu) == 1 ]]"
 check "reinstall leaves it closed" bash -c "bash $SETUP --key-file /tmp/other_key.pub --yes >/dev/null && [[ \$($HELPER status) == closed ]]"
 
+echo "== where Senzu connects"
+check "an address is recorded" bash -c "grep -q '\"hostname\": \"[^\"]' /etc/senzu/access.json"
+check "--host is recorded as given" bash -c "bash $SETUP --key-file /tmp/other_key.pub --host vps.example.com --yes >/dev/null && grep -q '\"hostname\": \"vps.example.com\"' /etc/senzu/access.json"
+
 echo "== several operators"
 printf '%s\n# second operator\n%s\n' "$(cat "$KEY.pub")" "$(cat /tmp/other_key.pub)" >/tmp/two_keys.pub
 check "two keys accepted" bash "$SETUP" --key-file /tmp/two_keys.pub --yes

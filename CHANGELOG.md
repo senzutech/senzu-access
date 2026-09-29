@@ -6,6 +6,14 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-29
+
+### Fixed
+
+- The address reported to Senzu is one it can reach: the address the machine reaches the internet
+  from, not its own name, which often resolves nowhere else. `--host NAME` sets it; a private
+  address is flagged at install.
+
 ## [0.2.0] - 2026-09-29
 
 ### Changed
@@ -29,6 +37,7 @@ All notable changes are documented here. The format follows
   gets no sudo rights. `--uninstall` removes everything.
 - Container tests on Debian 12 and Ubuntu 24.04 over real SSH connections.
 
-[Unreleased]: https://github.com/senzutech/senzu-access/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/senzutech/senzu-access/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/senzutech/senzu-access/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/senzutech/senzu-access/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/senzutech/senzu-access/releases/tag/v0.1.0
