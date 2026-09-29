@@ -22,7 +22,7 @@ gives Senzu that access the way managed-services providers do it, and closes it 
 time:
 
 - a **named `senzu` account**, never a shared root password;
-- **SSH key only**, Senzu's key, no password ever;
+- **SSH keys only**, one per Senzu operator (a person, an agent), no password ever;
 - **full sudo while open**, because installing software needs it;
 - **closed by default**: opened while a paid Senzu handover is in progress, closed when it is
   done, automatically, by the [Hermes plugin](https://github.com/senzutech/hermes-plugin-senzu);
@@ -40,17 +40,18 @@ sha256sum -c senzu-access-setup.sh.sha256
 sudo bash senzu-access-setup.sh
 ```
 
-It shows what it will do and the fingerprint of Senzu's key, and asks before doing it. Options:
+It shows what it will do and the fingerprint of each Senzu key, and asks before doing it. Options:
 
 | Option | Default | |
 |---|---|---|
 | `--agent-user USER` | `hermes` | The user the Hermes plugin runs as |
-| `--key-url URL` | Senzu's published key | Where to fetch Senzu's public key |
-| `--key-file PATH`, `--key "ssh-ed25519 …"` | | Give the key directly instead |
+| `--key-url URL` | Senzu's published keys | Where to fetch Senzu's public keys (one per line, eight at most) |
+| `--key-file PATH`, `--key "ssh-ed25519 …"` | | Give the keys directly instead |
 | `--yes` | | No confirmation (scripted installs) |
 | `--uninstall` | | Remove everything this installed |
 
-Running it again updates the key and the tooling and leaves the access closed.
+Running it again updates the keys (a new Senzu operator, a revoked one) and the tooling, and
+leaves the access closed.
 
 ## How it works
 
@@ -65,7 +66,7 @@ handover done ─────────────► plugin writes "closed" 
 | Installed | Owner, mode | Role |
 |---|---|---|
 | user `senzu` | password locked | The account Senzu logs in as |
-| `/etc/senzu/authorized_keys` | root, 0644 | Senzu's public key, copied in only while open |
+| `/etc/senzu/authorized_keys` | root, 0644 | Senzu's public keys, copied in only while open |
 | `/etc/senzu/access.json` | root, 0644 | Host name, SSH port, host key fingerprint, reported to Senzu |
 | `/etc/sudoers.d/senzu` | root, 0440 | `senzu ALL=(ALL:ALL) NOPASSWD: ALL`, checked by `visudo` |
 | `/usr/local/sbin/senzu-access` | root, 0755 | `on`, `off`, `status`, `sync` |
@@ -78,13 +79,13 @@ You can open or close it yourself at any time: `sudo senzu-access on`, `sudo sen
 
 ## Security model
 
-- **Two locks when closed.** The key is removed from the account *and* the account is expired,
-  so a copy of the key elsewhere does not open it. Closing also ends open sessions.
+- **Two locks when closed.** The keys are removed from the account *and* the account is expired,
+  so a copy of a key elsewhere does not open it. Closing also ends open sessions.
 - **The agent can only ask.** It may change the word in the request file; it cannot replace or
   remove that file, write the state, touch the key or run anything as root. Anything but the
   exact word `open` means closed.
-- **No shared secret.** Senzu's private key never leaves Senzu; this machine only holds the
-  public key.
+- **No shared secret.** Senzu's private keys never leave their owners; this machine only holds
+  public keys, one per operator, so one can be revoked without the others.
 - **Traceability.** Every opening and closing goes to syslog (`journalctl -t senzu-access`),
   every `sudo` by `senzu` to the auth log, and each change is reported to Senzu with the
   handover it served.

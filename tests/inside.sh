@@ -22,6 +22,9 @@ as_agent() { su -s /bin/bash hermes -c "$*"; }
 # A live process of senzu's, zombies excluded: a killed process may linger as a zombie until its
 # new parent reaps it, and it is dead all the same.
 senzu_running() { ps -u senzu -o stat=,comm= 2>/dev/null | awk -v name="$1" '$1 !~ /^Z/ && $2 == name {found=1} END {exit !found}'; }
+senzu_gone() { ! senzu_running "$1"; }
+# Retry a check for up to N seconds, for things that take a moment (an SSH session starting).
+wait_for() { local seconds=$1; shift; for _ in $(seq "$seconds"); do "$@" && return 0; sleep 1; done; "$@"; }
 # What the path unit (or cron) does when the request changes; containers have no systemd.
 request() { as_agent "echo $1 > $REQUEST" && "$HELPER" sync >/dev/null; }
 
@@ -35,8 +38,8 @@ pass "sshd running, agent user and test keys ready"
 echo "== refusals"
 refuse "not as root" as_agent "bash $SETUP --key-file $KEY.pub --yes"
 refuse "a private key" bash "$SETUP" --key-file "$KEY" --yes
-printf '%s\n%s\n' "$(cat "$KEY.pub")" "$(cat /tmp/other_key.pub)" >/tmp/two_keys.pub
-refuse "two keys at once" bash "$SETUP" --key-file /tmp/two_keys.pub --yes
+printf '%s\n%s\n' "$(cat "$KEY.pub")" "ssh-ed25519 notbase64 x" >/tmp/one_bad.pub
+refuse "a good key with a bad one" bash "$SETUP" --key-file /tmp/one_bad.pub --yes
 refuse "a garbage key" bash "$SETUP" --key "ssh-ed25519 notbase64 x" --yes
 refuse "an unknown agent user" bash "$SETUP" --key-file "$KEY.pub" --agent-user nobody_here --yes
 refuse "no --yes without a terminal" bash "$SETUP" --key-file "$KEY.pub" </dev/null
@@ -74,11 +77,10 @@ check "a repeated request changes nothing" bash -c "[[ \$($HELPER sync) == open 
 echo "== close on request, with a session in progress"
 ssh_senzu 'sleep 120' &
 session=$!
-sleep 2
-check "session running" senzu_running sleep
+# However slow the machine: wait for the session to be up, then for it to be gone.
+check "session running" wait_for 15 senzu_running sleep
 request closed
-sleep 1
-refuse "open session ended" senzu_running sleep
+check "open session ended" wait_for 10 senzu_gone sleep
 wait "$session" 2>/dev/null
 check "status closed" bash -c "[[ \$($HELPER status) == closed ]]"
 refuse "ssh refused after close" ssh_senzu true
@@ -102,6 +104,15 @@ refuse "old key refused" ssh_senzu true
 check "new key accepted" ssh -i /tmp/other_key -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 senzu@127.0.0.1 true
 check "one sudo file, for senzu only" bash -c "[[ \$(ls /etc/sudoers.d | grep -c senzu) == 1 ]]"
 check "reinstall leaves it closed" bash -c "bash $SETUP --key-file /tmp/other_key.pub --yes >/dev/null && [[ \$($HELPER status) == closed ]]"
+
+echo "== several operators"
+printf '%s\n# second operator\n%s\n' "$(cat "$KEY.pub")" "$(cat /tmp/other_key.pub)" >/tmp/two_keys.pub
+check "two keys accepted" bash "$SETUP" --key-file /tmp/two_keys.pub --yes
+request open
+check "first operator connects" ssh_senzu true
+check "second operator connects" ssh -i /tmp/other_key -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 senzu@127.0.0.1 true
+request closed
+refuse "closed for both" ssh_senzu true
 
 echo "== uninstall"
 check "uninstall succeeds" bash "$SETUP" --uninstall --yes

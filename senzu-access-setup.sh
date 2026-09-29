@@ -27,7 +27,7 @@
 
 set -euo pipefail
 
-readonly VERSION=0.1.0
+readonly VERSION=0.2.0
 readonly SENZU_USER=senzu
 readonly CONF_DIR=/etc/senzu
 readonly KEYS_FILE="$CONF_DIR/authorized_keys"
@@ -130,20 +130,27 @@ else
     fail "neither curl nor wget: pass the key with --key-file or --key"
 fi
 
-# Exactly one public key, of a sound type. A private key, or several lines, is refused.
-grep -q 'PRIVATE KEY' "$key_path" && fail "that is a private key: only the public key belongs here"
-[[ $(grep -cv '^[[:space:]]*$' "$key_path") -eq 1 ]] || fail "expected exactly one public key"
-key_line=$(grep -v '^[[:space:]]*$' "$key_path")
-[[ $key_line =~ ^(ssh-ed25519|ecdsa-sha2-nistp(256|384|521)|ssh-rsa)[[:space:]] ]] \
-    || fail "unsupported key type (ed25519, ecdsa or rsa expected)"
-printf '%s\n' "$key_line" >"$key_path"
-fingerprint=$(ssh-keygen -l -f "$key_path") || fail "not a valid SSH public key"
+# One public key per Senzu operator, one per line, eight at most, each of a sound type. A private
+# key, or any line that is not a public key, refuses the whole file.
+grep -q 'PRIVATE KEY' "$key_path" && fail "that is a private key: only public keys belong here"
+mapfile -t key_lines < <(grep -v -e '^[[:space:]]*$' -e '^[[:space:]]*#' "$key_path")
+(( ${#key_lines[@]} >= 1 && ${#key_lines[@]} <= 8 )) || fail "expected one to eight public keys"
+for key_line in "${key_lines[@]}"; do
+    [[ $key_line =~ ^(ssh-ed25519|ecdsa-sha2-nistp(256|384|521)|ssh-rsa)[[:space:]] ]] \
+        || fail "unsupported key type (ed25519, ecdsa or rsa expected)"
+done
+printf '%s\n' "${key_lines[@]}" >"$key_path"
+fingerprints=$(ssh-keygen -l -f "$key_path") || fail "not a valid SSH public key"
+[[ $(grep -c . <<<"$fingerprints") -eq ${#key_lines[@]} ]] || fail "not all valid SSH public keys"
+fingerprint=$(awk '{print $2}' <<<"$fingerprints" | paste -sd, -)
 
 getent passwd "$agent_user" >/dev/null || fail "no such user: $agent_user (use --agent-user)"
 
 say "Accès de maintenance Senzu"
 say "  utilisateur créé       : $SENZU_USER (fermé par défaut, clé SSH uniquement)"
-say "  clé Senzu              : $fingerprint"
+while read -r line; do
+    say "  clé Senzu              : $line"
+done <<<"$fingerprints"
 say "  ouverture / fermeture  : demandée par $agent_user dans $REQUEST_FILE, appliquée par le système"
 confirm "Installer ?"
 
