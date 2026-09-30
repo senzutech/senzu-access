@@ -67,7 +67,8 @@ handover done ─────────────► plugin writes "closed" 
 | Installed | Owner, mode | Role |
 |---|---|---|
 | user `senzu` | password locked | The account Senzu logs in as |
-| `/etc/senzu/authorized_keys` | root, 0644 | Senzu's public keys, copied in only while open |
+| `/etc/senzu/authorized_keys` | root, 0644 | Senzu's public keys (source), kept on the machine; never read by sshd |
+| `~senzu/.ssh/authorized_keys` | senzu, 0600 | Copy of those keys, present only while open; removed on close |
 | `/etc/senzu/access.json` | root, 0644 | Host name, SSH port, host key fingerprint, reported to Senzu |
 | `/etc/sudoers.d/senzu` | root, 0440 | `senzu ALL=(ALL:ALL) NOPASSWD: ALL`, checked by `visudo` |
 | `/usr/local/sbin/senzu-access` | root, 0755 | `on`, `off`, `status`, `sync` |
@@ -80,7 +81,7 @@ You can open or close it yourself at any time: `sudo senzu-access on`, `sudo sen
 
 ## Security model
 
-- **Two locks when closed.** The keys are removed from the account *and* the account is expired,
+- **Two locks when closed.** The keys are removed from the account's `~/.ssh` *and* the account is expired,
   so a copy of a key elsewhere does not open it. Closing also ends open sessions.
 - **The agent can only ask.** It may change the word in the request file; it cannot replace or
   remove that file, write the state, touch the key or run anything as root. Anything but the
